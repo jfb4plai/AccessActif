@@ -2,17 +2,44 @@ import { useState } from 'react'
 import { useTeachers } from '../../hooks/useTeachers'
 import TeacherForm from '../../components/TeacherForm'
 import StudentLinker from '../../components/StudentLinker'
+import { supabase } from '../../lib/supabase'
 
 export default function TeachersPage() {
   const { teachers, loading, upsertTeacher, deleteTeacher } = useTeachers()
   const [selected, setSelected] = useState(null)
   const [showForm, setShowForm] = useState(false)
+  const [sending, setSending] = useState(false)
+  const [sendResult, setSendResult] = useState(null)
 
   if (loading) return <p style={{ color: '#9a958c', padding: 20 }}>Chargement…</p>
 
   async function handleSave(data) {
     await upsertTeacher(data)
     setShowForm(false)
+  }
+
+  async function handleSendLink() {
+    if (!selected) return
+    setSending(true)
+    setSendResult(null)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/notify-teachers', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ teacher_ids: [selected.id] }),
+      })
+      const json = await res.json()
+      const r = json.results?.[0]
+      if (r?.status === 'sent') setSendResult({ ok: true, msg: `Lien envoyé (v${r.version})` })
+      else setSendResult({ ok: false, msg: r?.message || 'Erreur inconnue' })
+    } catch (e) {
+      setSendResult({ ok: false, msg: e.message })
+    }
+    setSending(false)
   }
 
   async function handleDelete(id) {
@@ -64,6 +91,20 @@ export default function TeachersPage() {
       ))}
 
       {selected && !showForm && <StudentLinker teacherId={selected.id} />}
+
+      {selected && !showForm && (
+        <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button onClick={handleSendLink} disabled={sending}
+            style={{ background: sending ? '#9a958c' : '#f97316', color: '#fff', border: 'none', borderRadius: 20, padding: '8px 20px', fontSize: 13, fontWeight: 600, cursor: sending ? 'default' : 'pointer' }}>
+            {sending ? 'Envoi…' : 'Envoyer le lien magique'}
+          </button>
+          {sendResult && (
+            <span style={{ fontSize: 12, color: sendResult.ok ? '#0a9370' : '#a32d2d' }}>
+              {sendResult.msg}
+            </span>
+          )}
+        </div>
+      )}
     </div>
   )
 }
