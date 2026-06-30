@@ -32,6 +32,7 @@ create table if not exists acces_students (
   id uuid primary key default gen_random_uuid(),
   school_id uuid references acces_schools(id) not null,
   anonymous_code text not null unique,
+  name text,
   class_code text,
   disorders text,
   created_at timestamptz default now()
