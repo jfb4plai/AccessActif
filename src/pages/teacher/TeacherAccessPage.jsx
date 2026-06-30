@@ -38,12 +38,19 @@ export default function TeacherAccessPage({ token }) {
   return (
     <div style={{ minHeight: '100vh', background: '#faf9f7' }}>
       {/* En-tête */}
-      <div style={{ background: '#fff', borderBottom: '1px solid #e8e4dd', padding: '12px 24px', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <img src="/plai-logo.jpg" alt="PLAI" style={{ height: 32 }} />
-        <div>
-          <div style={{ fontWeight: 700, fontSize: 16, color: '#1a1814' }}>AccèsActif</div>
-          <div style={{ fontSize: 11, color: '#9a958c' }}>Aménagements raisonnables</div>
+      <div style={{ background: '#fff', borderBottom: '1px solid #e8e4dd', padding: '12px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <img src="/plai-logo.jpg" alt="PLAI" style={{ height: 32 }} />
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 16, color: '#1a1814' }}>AccèsActif</div>
+            <div style={{ fontSize: 11, color: '#9a958c' }}>Aménagements raisonnables</div>
+          </div>
         </div>
+        <a href={`/api/generate-pdf?token=${encodeURIComponent(token)}`}
+          target="_blank" rel="noopener noreferrer"
+          style={{ background: '#f97316', color: '#fff', borderRadius: 20, padding: '6px 16px', fontSize: 12, fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap' }}>
+          Imprimer / PDF
+        </a>
       </div>
 
       <div style={{ maxWidth: 860, margin: '0 auto', padding: '24px 20px' }}>
