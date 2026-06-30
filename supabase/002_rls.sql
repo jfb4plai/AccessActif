@@ -71,14 +71,11 @@ create policy "teacher_students_own_school" on acces_teacher_students for all
     )
   );
 
--- acces_versions : suit les droits sur acces_students
+-- acces_versions : suit les droits sur acces_teachers (school_id direct)
 create policy "versions_own_school" on acces_versions for all
   using (
-    exists (
-      select 1 from acces_students s
-      where s.id = student_id
-      and (s.school_id = acces_my_school_id() or acces_my_role() = 'super_admin')
-    )
+    school_id = acces_my_school_id()
+    or acces_my_role() = 'super_admin'
   );
 
 -- acces_tokens et acces_access_log : service_role uniquement (API Vercel)
