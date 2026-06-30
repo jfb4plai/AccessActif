@@ -22,9 +22,11 @@ export default function ARDefinitionsPage() {
 
     let query = supabase.from('acces_ar_definitions').select('*').order('category').order('label')
 
-    // super_admin voit tout, les autres voient actif + leurs propositions
-    if (ref?.role !== 'super_admin') {
-      query = query.in('status', ['active', 'proposed']).or(`created_by.eq.${user.id},status.eq.active`)
+    // super_admin voit tout, les autres voient actif + leurs propres propositions
+    if (ref?.role === 'super_admin') {
+      // pas de filtre : retourne active + proposed + rejected
+    } else {
+      query = query.or(`status.eq.active,and(status.eq.proposed,created_by.eq.${user.id})`)
     }
 
     const { data } = await query
