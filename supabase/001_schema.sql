@@ -23,19 +23,17 @@ create table if not exists acces_ar_definitions (
   has_precision boolean default false,
   precision_label text,
   status text check (status in ('active','proposed','rejected')) default 'active',
-  proposed_by uuid references acces_referentes(id),
+  created_by uuid references acces_referentes(id),
   created_at timestamptz default now()
 );
 
--- ÉLÈVES
+-- ÉLÈVES (codes anonymes uniquement — pas de nom/prénom)
 create table if not exists acces_students (
   id uuid primary key default gen_random_uuid(),
   school_id uuid references acces_schools(id) not null,
-  code text not null unique,
-  first_name text not null,
-  class_code text not null,
-  referente_id uuid references acces_referentes(id),
-  notes text,
+  anonymous_code text not null unique,
+  class_code text,
+  disorders text,
   created_at timestamptz default now()
 );
 
@@ -56,7 +54,7 @@ create table if not exists acces_teachers (
   school_id uuid references acces_schools(id),
   name text not null,
   email text not null,
-  subject text not null,
+  subject text,
   created_at timestamptz default now()
 );
 
@@ -65,36 +63,32 @@ create table if not exists acces_teacher_students (
   id uuid primary key default gen_random_uuid(),
   teacher_id uuid references acces_teachers(id) on delete cascade,
   student_id uuid references acces_students(id) on delete cascade,
-  date_start date default current_date,
-  date_end date,
   unique(teacher_id, student_id)
 );
 
--- VERSIONS PAR ÉLÈVE
+-- VERSIONS ENVOYÉES PAR ENSEIGNANT
 create table if not exists acces_versions (
   id uuid primary key default gen_random_uuid(),
-  student_id uuid references acces_students(id) on delete cascade,
-  version_num integer not null,
-  modified_by uuid references acces_referentes(id),
-  created_at timestamptz default now()
+  school_id uuid references acces_schools(id),
+  teacher_id uuid references acces_teachers(id) on delete cascade,
+  sent_at timestamptz default now(),
+  token_used text,
+  version_number integer not null default 1
 );
 
 -- TOKENS ENSEIGNANTS (accès service_role uniquement)
 create table if not exists acces_tokens (
   id uuid primary key default gen_random_uuid(),
   teacher_id uuid references acces_teachers(id) on delete cascade,
-  token_hash text not null unique,
-  expires_at timestamptz not null,
-  revoked boolean default false,
+  token text unique not null default encode(gen_random_bytes(32), 'hex'),
+  expires_at timestamptz not null default (now() + interval '30 days'),
   created_at timestamptz default now()
 );
 
 -- JOURNAL D'ACCÈS (accès service_role uniquement)
 create table if not exists acces_access_log (
   id uuid primary key default gen_random_uuid(),
-  teacher_id uuid references acces_teachers(id),
-  token_id uuid references acces_tokens(id),
-  action text check (action in ('email_opened','link_clicked','pdf_downloaded','smartschool_copied')),
-  version_seen integer,
-  created_at timestamptz default now()
+  token text,
+  accessed_at timestamptz default now(),
+  ip_address text
 );
