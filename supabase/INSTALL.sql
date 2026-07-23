@@ -1,11 +1,16 @@
 -- ============================================================================
 -- AccèsActif — INSTALLATION COMPLÈTE, EN UN SEUL COPIER-COLLER
 -- ============================================================================
--- Pour une base vierge. Écrit l'état final du schéma, sans rejouer l'historique
--- des migrations 001 à 009 (qui restent dans le dossier pour mémoire).
+-- Écrit l'état final du schéma, sans rejouer l'historique des migrations 001 à
+-- 009 (qui restent dans le dossier pour mémoire).
 --
--- Rejouable sans risque : tout est idempotent (if not exists / drop-create /
--- on conflict do nothing). Aucune donnée existante n'est supprimée.
+-- Fonctionne aussi bien sur une base vierge que sur une base où 001 à 004 ont
+-- déjà été appliquées : chaque table est créée si absente, puis mise à niveau
+-- colonne par colonne si elle existait déjà.
+--
+-- Rejouable sans risque. Les seules suppressions sont les colonnes
+-- `disorders`, `name`, `ip_address` et `token`, voulues (donnée de santé et
+-- secrets en clair).
 --
 -- AVANT DE LANCER : remplacer l'email et les noms d'écoles dans la PARTIE 5.
 -- Le compte doit déjà exister dans Authentication > Users.
@@ -29,8 +34,6 @@ create table if not exists acces_referentes (
   role       text check (role in ('super_admin','referente_pole','referente_par')) default 'referente_pole',
   created_at timestamptz default now()
 );
-alter table acces_referentes drop column if exists school_id;
-
 -- Un membre du PLAI a un seul compte et peut intervenir dans N écoles
 -- (cas courant dans le fondamental).
 create table if not exists acces_referente_schools (
@@ -39,6 +42,21 @@ create table if not exists acces_referente_schools (
   created_at   timestamptz default now(),
   primary key (referente_id, school_id)
 );
+
+-- Reprise du rattachement mono-école AVANT de supprimer la colonne, sinon
+-- le lien serait perdu sur une base déjà peuplée.
+do $$
+begin
+  if exists (select 1 from information_schema.columns
+              where table_name = 'acces_referentes' and column_name = 'school_id') then
+    execute $q$insert into acces_referente_schools (referente_id, school_id)
+               select id, school_id from acces_referentes where school_id is not null
+               on conflict do nothing$q$;
+  end if;
+end $$;
+
+-- Deux sources de vérité pour le rattachement = bug garanti.
+alter table acces_referentes drop column if exists school_id;
 
 create table if not exists acces_ar_definitions (
   id              uuid primary key default gen_random_uuid(),
@@ -65,6 +83,32 @@ create table if not exists acces_students (
   carried_from   uuid references acces_students(id) on delete set null,
   created_at     timestamptz default now()
 );
+-- Mise à niveau si la table datait de la migration 001.
+alter table acces_students add column if not exists first_name   text;
+alter table acces_students add column if not exists last_name    text not null default '';
+alter table acces_students add column if not exists school_year  text not null default '2026-2027';
+alter table acces_students add column if not exists archived_at  timestamptz;
+alter table acces_students add column if not exists carried_from uuid references acces_students(id) on delete set null;
+
+-- Reprise des identités : la colonne `name` (migration 004) n'a jamais été
+-- écrite par l'interface, on retombe sur anonymous_code si elle est vide.
+do $$
+begin
+  if exists (select 1 from information_schema.columns
+              where table_name = 'acces_students' and column_name = 'name') then
+    execute $q$update acces_students
+                  set first_name = coalesce(nullif(trim(name), ''), anonymous_code, 'À compléter')
+                where first_name is null$q$;
+  end if;
+end $$;
+update acces_students set first_name = coalesce(anonymous_code, 'À compléter') where first_name is null;
+
+alter table acces_students alter column first_name set not null;
+alter table acces_students alter column anonymous_code drop not null;
+alter table acces_students drop constraint if exists acces_students_anonymous_code_key;
+
+-- Donnée de santé (RGPD art. 9) : supprimée, le diagnostic vit dans le
+-- dossier de l'élève. `name` est remplacée par first_name / last_name.
 alter table acces_students drop column if exists disorders;
 alter table acces_students drop column if exists name;
 
@@ -84,6 +128,7 @@ create table if not exists acces_student_ars (
   updated_at       timestamptz default now(),
   unique(student_id, ar_definition_id)
 );
+alter table acces_student_ars add column if not exists review_due_on date;
 
 create table if not exists acces_teachers (
   id         uuid primary key default gen_random_uuid(),
@@ -118,6 +163,7 @@ create table if not exists acces_tokens (
   revoked_at timestamptz,
   created_at timestamptz default now()
 );
+alter table acces_tokens add column if not exists revoked_at timestamptz;
 create index if not exists acces_tokens_teacher_idx on acces_tokens (teacher_id, expires_at desc);
 
 -- Journal minimisé : ni IP ni token en clair.
@@ -126,6 +172,19 @@ create table if not exists acces_access_log (
   teacher_id  uuid references acces_teachers(id) on delete cascade,
   accessed_at timestamptz default now()
 );
+alter table acces_access_log add column if not exists teacher_id uuid
+  references acces_teachers(id) on delete cascade;
+
+-- Rattachement des lignes existantes avant de perdre la colonne token.
+do $$
+begin
+  if exists (select 1 from information_schema.columns
+              where table_name = 'acces_access_log' and column_name = 'token') then
+    execute $q$update acces_access_log l set teacher_id = t.teacher_id
+                 from acces_tokens t where t.token = l.token and l.teacher_id is null$q$;
+  end if;
+end $$;
+
 alter table acces_access_log drop column if exists ip_address;
 alter table acces_access_log drop column if exists token;
 create index if not exists acces_access_log_teacher_idx on acces_access_log (teacher_id, accessed_at desc);
