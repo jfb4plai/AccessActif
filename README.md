@@ -63,13 +63,10 @@ Les migrations 006 et 007 sont **destructives** (`drop column disorders`,
 refonte des policies) : exporter la base avant de les appliquer sur des
 données réelles.
 
-Rattacher au moins une école à chaque compte, sinon l'application affiche
-« aucune école rattachée » :
-
-```sql
-insert into acces_referente_schools (referente_id, school_id)
-values ('<uuid du compte>', '<uuid de l ecole>');
-```
+Puis exécuter `bootstrap.sql` (écoles, rôle, rattachement). Sans au moins
+une ligne dans `acces_referente_schools`, l'application affiche « aucune
+école rattachée ». Les comptes se créent dans Supabase Auth : l'application
+ne gère pas l'inscription.
 
 ## Développement
 
