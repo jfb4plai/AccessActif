@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { input, label, btn, card, COLORS, BASE, SMALL } from '../lib/ui'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -11,34 +12,41 @@ export default function LoginPage() {
     e.preventDefault()
     setLoading(true)
     setError('')
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) setError(error.message)
+    const { error: err } = await supabase.auth.signInWithPassword({ email, password })
+    if (err) setError(err.message)
     setLoading(false)
   }
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#faf9f7' }}>
-      <div style={{ background: '#fff', border: '1px solid #e8e4dd', borderRadius: 12, padding: '32px 36px', width: 360 }}>
-        <img src="/plai-logo.jpg" alt="PLAI" style={{ height: 36, marginBottom: 20 }} />
-        <h1 style={{ fontFamily: 'system-ui', fontSize: 22, fontWeight: 700, marginBottom: 4, color: '#1a1814' }}>AccèsActif</h1>
-        <p style={{ fontSize: 13, color: '#9a958c', marginBottom: 24 }}>Accès référentes du Pôle</p>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: COLORS.bg, padding: 20 }}>
+      <div style={{ ...card, width: '100%', maxWidth: 400, padding: '32px 36px' }}>
+        <img src="/plai-logo.jpg" alt="" style={{ height: 40, marginBottom: 20 }} />
+        <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 4, color: COLORS.text }}>AccèsActif</h1>
+        <p style={{ fontSize: BASE, color: COLORS.muted, marginBottom: 24 }}>
+          Espace des membres du PLAI
+        </p>
         <form onSubmit={handleLogin}>
-          <div style={{ marginBottom: 12 }}>
-            <label style={{ fontSize: 11, fontWeight: 600, color: '#5a564f', display: 'block', marginBottom: 4 }}>Email</label>
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)} required
-              style={{ width: '100%', border: '1px solid #d4cfc6', borderRadius: 6, padding: '8px 10px', fontSize: 13, boxSizing: 'border-box' }} />
+          <div style={{ marginBottom: 14 }}>
+            <label style={label} htmlFor="login-email">Email</label>
+            <input id="login-email" type="email" autoComplete="username" value={email}
+              onChange={e => setEmail(e.target.value)} required style={{ ...input, marginBottom: 0 }} />
           </div>
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ fontSize: 11, fontWeight: 600, color: '#5a564f', display: 'block', marginBottom: 4 }}>Mot de passe</label>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} required
-              style={{ width: '100%', border: '1px solid #d4cfc6', borderRadius: 6, padding: '8px 10px', fontSize: 13, boxSizing: 'border-box' }} />
+          <div style={{ marginBottom: 18 }}>
+            <label style={label} htmlFor="login-password">Mot de passe</label>
+            <input id="login-password" type="password" autoComplete="current-password" value={password}
+              onChange={e => setPassword(e.target.value)} required style={{ ...input, marginBottom: 0 }} />
           </div>
-          {error && <p style={{ fontSize: 12, color: '#a32d2d', marginBottom: 12 }}>{error}</p>}
+          {error && (
+            <p role="alert" style={{ fontSize: BASE, color: COLORS.danger, marginBottom: 12 }}>{error}</p>
+          )}
           <button type="submit" disabled={loading}
-            style={{ width: '100%', background: loading ? '#9a958c' : '#0a9370', color: '#fff', border: 'none', borderRadius: 20, padding: '10px', fontSize: 13, fontWeight: 600, cursor: loading ? 'default' : 'pointer' }}>
+            style={{ ...btn, width: '100%', background: loading ? COLORS.muted : COLORS.teal }}>
             {loading ? 'Connexion…' : 'Se connecter'}
           </button>
         </form>
+        <p style={{ fontSize: SMALL, color: COLORS.muted, marginTop: 20, marginBottom: 0 }}>
+          Les enseignants n'ont pas de compte : ils reçoivent un lien personnel par email.
+        </p>
       </div>
     </div>
   )

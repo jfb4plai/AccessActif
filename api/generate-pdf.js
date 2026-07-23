@@ -1,151 +1,131 @@
-const { createClient } = require('@supabase/supabase-js')
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-)
+import { esc, resolveToken, loadTeacherView, commonARs } from './_auth.js'
 
 const CATEGORIES = ['Matériels', 'Pédagogiques', 'Organisationnels']
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).end()
 
   const { token } = req.query
   if (!token) return res.status(400).end('Token manquant')
 
-  // Valider le token
-  const { data: tokenRow } = await supabase
-    .from('acces_tokens')
-    .select('teacher_id, expires_at')
-    .eq('token', token)
-    .single()
+  const resolved = await resolveToken(token)
+  if (resolved.error) return res.status(resolved.status).end(resolved.error)
 
-  if (!tokenRow) return res.status(404).end('Lien invalide')
-  if (new Date(tokenRow.expires_at) < new Date()) return res.status(410).end('Lien expiré')
-
-  // Récupérer l'enseignant
-  const { data: teacher } = await supabase
-    .from('acces_teachers')
-    .select('id, name, subject')
-    .eq('id', tokenRow.teacher_id)
-    .single()
-
-  // Récupérer les élèves et leurs ARs
-  const { data: links } = await supabase
-    .from('acces_teacher_students')
-    .select(`
-      student_id,
-      acces_students (
-        id, anonymous_code, class_code,
-        acces_student_ars (
-          is_active, precision_value,
-          acces_ar_definitions ( id, label, category, has_precision, precision_label )
-        )
-      )
-    `)
-    .eq('teacher_id', tokenRow.teacher_id)
-
-  // Construire byClass
-  const byClass = {}
-  for (const link of links || []) {
-    const s = link.acces_students
-    if (!s) continue
-    const cls = s.class_code || 'Sans classe'
-    if (!byClass[cls]) byClass[cls] = []
-    const activeARs = (s.acces_student_ars || [])
-      .filter(a => a.is_active && a.acces_ar_definitions?.label)
-      .map(a => ({
-        label: a.acces_ar_definitions.label,
-        category: a.acces_ar_definitions.category,
-        has_precision: a.acces_ar_definitions.has_precision,
-        precision_value: a.precision_value,
-      }))
-    byClass[cls].push({ anonymous_code: s.anonymous_code, ars: activeARs })
-  }
-
+  const { teacher, byClass } = await loadTeacherView(resolved.teacherId)
   const date = new Date().toLocaleDateString('fr-BE', { day: 'numeric', month: 'long', year: 'numeric' })
 
-  // Générer le HTML des classes
   const classesHtml = Object.entries(byClass).sort().map(([cls, students]) => {
+    const common = commonARs(students)
+
+    const commonHtml = common.length ? `
+      <div class="common">
+        <div class="common-title">Aménagements communs à la classe</div>
+        <ul class="common-list">${common.map(l => `<li>${esc(l)}</li>`).join('')}</ul>
+      </div>` : ''
+
     const studentsHtml = students.map(student => {
       const cols = CATEGORIES.map(cat => {
         const catARs = student.ars.filter(a => a.category === cat)
         const items = catARs.length
-          ? catARs.map(ar => `<li>${ar.label}${ar.has_precision && ar.precision_value ? ` (${ar.precision_value})` : ''}</li>`).join('')
-          : '<li style="color:#ccc">—</li>'
-        return `<td style="border:1px solid #e8e4dd;padding:8px;vertical-align:top;width:33%"><ul style="margin:0;padding-left:16px;font-size:11px">${items}</ul></td>`
+          ? catARs.map(ar => `<li>${esc(ar.label)}${ar.has_precision && ar.precision_value ? ` (${esc(ar.precision_value)})` : ''}</li>`).join('')
+          : '<li class="none">Aucun</li>'
+        return `<td data-cat="${esc(cat)}"><ul>${items}</ul></td>`
       }).join('')
 
       return `
-        <tr>
-          <td colspan="3" style="background:#faf9f7;padding:4px 8px;font-size:11px;font-weight:600;border:1px solid #e8e4dd">${student.anonymous_code}</td>
-        </tr>
-        <tr>${cols}</tr>
-      `
+        <tr><th colspan="3" class="student">${esc(student.name)}</th></tr>
+        <tr>${cols}</tr>`
     }).join('')
 
     return `
-      <div style="margin-bottom:20px;page-break-inside:avoid">
-        <div style="background:#1a1814;color:#fff;padding:6px 12px;font-size:12px;font-weight:700">${cls}</div>
-        <table style="width:100%;border-collapse:collapse">
+      <section class="classe">
+        <h2>${esc(cls)}</h2>
+        ${commonHtml}
+        <table>
           <thead>
-            <tr>
-              ${CATEGORIES.map(c => `<th style="background:#f0faf7;color:#0a9370;font-size:10px;text-transform:uppercase;padding:5px 8px;border:1px solid #e8e4dd;text-align:left">${c}</th>`).join('')}
-            </tr>
+            <tr>${CATEGORIES.map(c => `<th scope="col">${esc(c)}</th>`).join('')}</tr>
           </thead>
           <tbody>${studentsHtml}</tbody>
         </table>
-      </div>
-    `
+      </section>`
   }).join('')
 
   const html = `<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<title>ARs — ${teacher?.name || ''} — AccèsActif</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Aménagements — ${esc(teacher?.name)} — AccèsActif</title>
 <style>
+  /* Arial 12 pt : seuil de lisibilité retenu pour les supports AU imprimés. */
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: Arial, sans-serif; color: #1a1814; font-size: 12px; line-height: 1.4; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #1a1814; font-size: 12pt; line-height: 1.45; }
+  .print-container { padding: 20px; max-width: 1000px; margin: 0 auto; }
+  .header { border-bottom: 2px solid #0a9370; padding-bottom: 12px; margin-bottom: 20px; }
+  .header-top { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+  .brand { font-size: 18pt; font-weight: 700; color: #046b52; }
+  .who { font-size: 13pt; font-weight: 700; margin-top: 4px; }
+  .when { font-size: 12pt; color: #5a564f; margin-top: 2px; }
+  .print-btn { background: #0a9370; color: #fff; border: none; padding: 10px 22px; border-radius: 20px; font-size: 12pt; font-weight: 600; cursor: pointer; font-family: inherit; }
+  .print-btn:hover { background: #067d5c; }
+  .classe { margin-bottom: 24px; page-break-inside: avoid; }
+  .classe > h2 { background: #1a1814; color: #fff; padding: 8px 12px; font-size: 13pt; }
+  .common { background: #e8f5f0; border: 1px solid #0a9370; border-top: none; padding: 10px 12px; }
+  .common-title { font-weight: 700; color: #046b52; margin-bottom: 4px; }
+  .common-list { padding-left: 20px; }
+  .common-list li { list-style: disc; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { border: 1px solid #e8e4dd; padding: 8px; vertical-align: top; text-align: left; width: 33.33%; }
+  thead th { background: #f0faf7; color: #046b52; text-transform: uppercase; font-size: 11pt; }
+  .student { background: #faf9f7; font-weight: 700; }
+  td ul { padding-left: 18px; }
+  td li { list-style: disc; margin-bottom: 4px; }
+  td li.none { list-style: none; margin-left: -18px; color: #5a564f; }
+  .footer { margin-top: 24px; font-size: 11pt; color: #5a564f; text-align: center; border-top: 1px solid #e8e4dd; padding-top: 12px; }
+  .empty { font-size: 12pt; color: #5a564f; }
   @media print {
     body { padding: 0; margin: 0; }
     .no-print { display: none !important; }
     @page { size: A4; margin: 1.5cm; }
   }
-  .print-container { padding: 20px; }
-  .header { border-bottom: 2px solid #0a9370; padding-bottom: 12px; margin-bottom: 20px; }
-  .header-top { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 12px; }
-  .logo-title { flex: 1; }
-  .logo-title > div:first-child { font-size: 18px; font-weight: 700; color: #0a9370; }
-  .logo-title > div:nth-child(2) { font-size: 13px; font-weight: 600; margin-top: 4px; }
-  .logo-title > div:nth-child(3) { font-size: 11px; color: #9a958c; margin-top: 2px; }
-  .print-btn { background: #0a9370; color: #fff; border: none; padding: 8px 20px; border-radius: 20px; font-size: 13px; font-weight: 600; cursor: pointer; }
-  .print-btn:hover { background: #067d5c; }
-  .footer { margin-top: 24px; font-size: 10px; color: #9a958c; text-align: center; border-top: 1px solid #e8e4dd; padding-top: 12px; }
-  ul { list-style: none; margin: 0; padding: 0; }
-  li { margin-bottom: 2px; }
+  /* Sur téléphone, les 3 colonnes deviennent 3 blocs empilés. */
+  @media screen and (max-width: 640px) {
+    table, thead, tbody, tr, td, th { display: block; width: 100% !important; }
+    thead { display: none; }
+    td { border-top: none; }
+    td::before { content: attr(data-cat); display: block; font-size: 11pt; font-weight: 700; color: #046b52; text-transform: uppercase; margin-bottom: 4px; }
+  }
 </style>
 </head>
 <body>
 <div class="print-container">
-  <div class="header">
+  <header class="header">
     <div class="header-top">
-      <div class="logo-title">
-        <div>AccèsActif — PLAI</div>
-        <div>${teacher?.name || ''}${teacher?.subject ? ' — ' + teacher.subject : ''}</div>
-        <div>Aménagements raisonnables · ${date}</div>
+      <div>
+        <div class="brand">AccèsActif — PLAI</div>
+        <div class="who">${esc(teacher?.name)}${teacher?.subject ? ' — ' + esc(teacher.subject) : ''}</div>
+        <div class="when">Aménagements raisonnables · ${esc(date)}</div>
       </div>
       <button class="no-print print-btn" onclick="window.print()">Imprimer / Enregistrer en PDF</button>
     </div>
-  </div>
+  </header>
 
-  ${classesHtml}
+  ${classesHtml || '<p class="empty">Aucun élève ne vous est assigné pour le moment.</p>'}
 
-  <div class="footer">Document confidentiel — usage pédagogique interne uniquement — PLAI Liège</div>
+  <footer class="footer">
+    Document confidentiel — usage pédagogique interne uniquement — PLAI Liège<br>
+    Ne pas diffuser hors de l'équipe éducative concernée.
+  </footer>
 </div>
 </body>
 </html>`
 
   res.setHeader('Content-Type', 'text/html; charset=utf-8')
+  // Le token circule en query string : pas de fuite via Referer, pas de cache.
+  res.setHeader('Referrer-Policy', 'no-referrer')
+  res.setHeader('Cache-Control', 'no-store, max-age=0')
+  res.setHeader('X-Robots-Tag', 'noindex, nofollow')
   return res.status(200).send(html)
 }

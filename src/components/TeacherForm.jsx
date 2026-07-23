@@ -1,58 +1,66 @@
 import { useState } from 'react'
-
-const inputStyle = {
-  width: '100%', border: '1px solid #d4cfc6', borderRadius: 6,
-  padding: '8px 10px', fontSize: 13, boxSizing: 'border-box', marginBottom: 4
-}
-const labelStyle = { fontSize: 11, fontWeight: 600, color: '#5a564f', display: 'block', marginBottom: 4 }
-const helpStyle = { fontSize: 11, color: '#9a958c', marginBottom: 12 }
+import { input, label, help, btn, btnGhost, card, h3, COLORS } from '../lib/ui'
 
 export default function TeacherForm({ teacher, onSave, onCancel }) {
   const [name, setName] = useState(teacher?.name || '')
   const [email, setEmail] = useState(teacher?.email || '')
   const [subject, setSubject] = useState(teacher?.subject || '')
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
 
   async function handleSubmit(e) {
     e.preventDefault()
     setSaving(true)
-    await onSave({ id: teacher?.id, name, email, subject })
+    setError(null)
+    try {
+      await onSave({ id: teacher?.id, name: name.trim(), email: email.trim(), subject: subject.trim() || null })
+    } catch (err) {
+      setError(err.message)
+    }
     setSaving(false)
   }
 
   return (
-    <div style={{ background: '#fff', border: '1px solid #e8e4dd', borderRadius: 10, padding: '20px 24px', marginBottom: 20 }}>
-      <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 16, color: '#1a1814' }}>
-        {teacher ? 'Modifier l\'enseignant' : 'Ajouter un enseignant'}
-      </h3>
+    <div style={{ ...card, marginBottom: 20 }}>
+      <h3 style={h3}>{teacher ? 'Modifier l\'enseignant' : 'Ajouter un enseignant'}</h3>
       <form onSubmit={handleSubmit}>
         <div>
-          <label style={labelStyle}>Nom complet *</label>
-          <input value={name} onChange={e => setName(e.target.value)} required
-            placeholder="Ex: Marie Dupont" style={inputStyle} />
-          <p style={helpStyle}>Nom affiché dans le lien magique envoyé à l'enseignant.</p>
+          <label style={label} htmlFor="tf-name">Nom complet *</label>
+          <input id="tf-name" value={name} onChange={e => setName(e.target.value)} required
+            placeholder="Ex : Marie Dupont" style={input} />
+          <p style={help}>Affiché en tête du document que l'enseignant consulte et imprime.</p>
         </div>
         <div>
-          <label style={labelStyle}>Email *</label>
-          <input type="email" value={email} onChange={e => setEmail(e.target.value)} required
-            placeholder="Ex: marie.dupont@ens.ecl.be" style={inputStyle} />
-          <p style={helpStyle}>Adresse à laquelle le lien magique sera envoyé. Toute adresse email est acceptée.</p>
+          <label style={label} htmlFor="tf-email">Email *</label>
+          <input id="tf-email" type="email" value={email} onChange={e => setEmail(e.target.value)} required
+            placeholder="Ex : marie.dupont@ens.ecl.be" style={input} />
+          <p style={help}>
+            Adresse à laquelle le lien est envoyé. Vérifiez-la : le lien donne accès
+            à des informations sur des élèves nommés.
+          </p>
         </div>
         <div>
-          <label style={labelStyle}>Matière / cours</label>
-          <input value={subject} onChange={e => setSubject(e.target.value)}
-            placeholder="Ex: Français, Mathématiques, Histoire-Géo" style={inputStyle} />
-          <p style={helpStyle}>Optionnel. Utilisé pour regrouper les enseignants par matière dans le suivi.</p>
+          <label style={label} htmlFor="tf-subject">Matière / cours</label>
+          <input id="tf-subject" value={subject} onChange={e => setSubject(e.target.value)}
+            placeholder="Ex : Français, Mathématiques, Atelier cuisine" style={input} />
+          <p style={help}>
+            Facultatif. Apparaît sur son document et sert à repérer qui a été prévenu
+            dans le suivi des envois.
+          </p>
         </div>
+
+        {error && (
+          <p role="alert" style={{ color: COLORS.danger, fontSize: 16, marginBottom: 12 }}>
+            Enregistrement impossible : {error}
+          </p>
+        )}
+
         <div style={{ display: 'flex', gap: 8 }}>
           <button type="submit" disabled={saving}
-            style={{ background: saving ? '#9a958c' : '#0a9370', color: '#fff', border: 'none', borderRadius: 20, padding: '8px 20px', fontSize: 13, fontWeight: 600, cursor: saving ? 'default' : 'pointer' }}>
+            style={{ ...btn, background: saving ? COLORS.muted : COLORS.teal }}>
             {saving ? 'Enregistrement…' : 'Enregistrer'}
           </button>
-          <button type="button" onClick={onCancel}
-            style={{ background: 'none', border: '1px solid #d4cfc6', borderRadius: 20, padding: '8px 16px', fontSize: 13, color: '#5a564f', cursor: 'pointer' }}>
-            Annuler
-          </button>
+          <button type="button" onClick={onCancel} style={btnGhost}>Annuler</button>
         </div>
       </form>
     </div>

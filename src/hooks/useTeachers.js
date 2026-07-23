@@ -1,67 +1,70 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import { useApp } from '../lib/useApp'
 
 export function useTeachers() {
+  const { schoolId } = useApp()
   const [teachers, setTeachers] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
-  async function load() {
+  const load = useCallback(async () => {
+    if (!schoolId) { setTeachers([]); setLoading(false); return }
     setLoading(true)
-    const { data } = await supabase
+    const { data, error: err } = await supabase
       .from('acces_teachers')
       .select('*, acces_teacher_students(student_id)')
+      .eq('school_id', schoolId)
       .order('name')
+    setError(err?.message || null)
     setTeachers(data || [])
     setLoading(false)
-  }
+  }, [schoolId])
 
   async function upsertTeacher(teacher) {
-    const { data: { user } } = await supabase.auth.getUser()
-    const { data: ref } = await supabase
-      .from('acces_referentes')
-      .select('school_id')
-      .eq('id', user.id)
-      .single()
-
-    const payload = {
-      ...teacher,
-      school_id: teacher.school_id || ref?.school_id,
-    }
-    const { data, error } = await supabase
+    const payload = { ...teacher, school_id: teacher.school_id || schoolId }
+    const { data, error: err } = await supabase
       .from('acces_teachers')
       .upsert(payload, { onConflict: 'id' })
       .select()
       .single()
-    if (error) throw error
+    if (err) throw err
     await load()
     return data
   }
 
   async function deleteTeacher(id) {
-    await supabase.from('acces_teachers').delete().eq('id', id)
+    const { error: err } = await supabase.from('acces_teachers').delete().eq('id', id)
+    if (err) throw err
     await load()
   }
 
-  useEffect(() => { load() }, [])
-  return { teachers, loading, upsertTeacher, deleteTeacher, reload: load }
+  useEffect(() => { load() }, [load])
+  return { teachers, loading, error, upsertTeacher, deleteTeacher, reload: load }
 }
 
 export function useTeacherStudents(teacherId) {
+  const { schoolId, year } = useApp()
   const [linkedStudentIds, setLinkedStudentIds] = useState([])
   const [allStudents, setAllStudents] = useState([])
   const [loading, setLoading] = useState(true)
 
-  async function load() {
-    if (!teacherId) { setLoading(false); return }
+  const load = useCallback(async () => {
+    if (!teacherId || !schoolId) { setLoading(false); return }
     setLoading(true)
     const [{ data: links }, { data: students }] = await Promise.all([
       supabase.from('acces_teacher_students').select('student_id').eq('teacher_id', teacherId),
-      supabase.from('acces_students').select('id, anonymous_code, class_code').order('class_code'),
+      supabase.from('acces_students')
+        .select('id, first_name, last_name, anonymous_code, class_code')
+        .eq('school_id', schoolId)
+        .eq('school_year', year)
+        .is('archived_at', null)
+        .order('class_code').order('first_name').order('last_name'),
     ])
     setLinkedStudentIds((links || []).map(l => l.student_id))
     setAllStudents(students || [])
     setLoading(false)
-  }
+  }, [teacherId, schoolId, year])
 
   async function toggleStudent(studentId, linked) {
     if (linked) {
@@ -73,6 +76,6 @@ export function useTeacherStudents(teacherId) {
     await load()
   }
 
-  useEffect(() => { load() }, [teacherId])
+  useEffect(() => { load() }, [load])
   return { linkedStudentIds, allStudents, loading, toggleStudent, reload: load }
 }

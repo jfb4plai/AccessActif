@@ -1,6 +1,20 @@
 import { useEffect, useState } from 'react'
+import { BASE, SMALL, COLORS } from '../../lib/ui'
 
 const CATEGORIES = ['Matériels', 'Pédagogiques', 'Organisationnels']
+
+/** Aménagements présents chez au moins un tiers de la classe (min. 2 élèves). */
+function commonARs(students) {
+  const threshold = Math.max(2, Math.ceil(students.length / 3))
+  const count = {}
+  for (const s of students) {
+    for (const ar of s.ars) count[ar.label] = (count[ar.label] || 0) + 1
+  }
+  return Object.entries(count)
+    .filter(([, n]) => n >= threshold)
+    .map(([label]) => label)
+    .sort((a, b) => a.localeCompare(b, 'fr'))
+}
 
 export default function TeacherAccessPage({ token }) {
   const [data, setData] = useState(null)
@@ -10,132 +24,132 @@ export default function TeacherAccessPage({ token }) {
   useEffect(() => {
     fetch(`/api/teacher-access?token=${encodeURIComponent(token)}`)
       .then(r => r.json())
-      .then(d => {
-        if (d.error) setError(d.error)
-        else setData(d)
-      })
+      .then(d => { if (d.error) setError(d.error); else setData(d) })
       .catch(() => setError('Erreur de chargement'))
       .finally(() => setLoading(false))
   }, [token])
 
   if (loading) return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#faf9f7' }}>
-      <p style={{ color: '#9a958c' }}>Chargement de vos aménagements…</p>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: COLORS.bg }}>
+      <p role="status" style={{ color: COLORS.muted, fontSize: BASE }}>Chargement de vos aménagements…</p>
     </div>
   )
 
   if (error) return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#faf9f7' }}>
-      <div style={{ textAlign: 'center' }}>
-        <p style={{ color: '#a32d2d', fontSize: 16, fontWeight: 600 }}>{error}</p>
-        <p style={{ color: '#9a958c', fontSize: 13 }}>Contactez votre référente PLAI si le problème persiste.</p>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: COLORS.bg, padding: 20 }}>
+      <div role="alert" style={{ textAlign: 'center' }}>
+        <p style={{ color: COLORS.danger, fontSize: 18, fontWeight: 700 }}>{error}</p>
+        <p style={{ color: COLORS.muted, fontSize: BASE }}>Contactez votre référente PLAI si le problème persiste.</p>
       </div>
     </div>
   )
 
   const { teacher, byClass } = data
+  const classes = Object.entries(byClass).sort()
 
   return (
-    <div style={{ minHeight: '100vh', background: '#faf9f7' }}>
-      {/* En-tête */}
-      <div style={{ background: '#fff', borderBottom: '1px solid #e8e4dd', padding: '12px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+    <div style={{ minHeight: '100vh', background: COLORS.bg, fontSize: BASE, lineHeight: 1.5 }}>
+      <header style={{ background: '#fff', borderBottom: `1px solid ${COLORS.border}`, padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <img src="/plai-logo.jpg" alt="PLAI" style={{ height: 32 }} />
+          <img src="/plai-logo.jpg" alt="" style={{ height: 36 }} />
           <div>
-            <div style={{ fontWeight: 700, fontSize: 16, color: '#1a1814' }}>AccèsActif</div>
-            <div style={{ fontSize: 11, color: '#9a958c' }}>Aménagements raisonnables</div>
+            <div style={{ fontWeight: 700, fontSize: 18, color: COLORS.text }}>AccèsActif</div>
+            <div style={{ fontSize: BASE, color: COLORS.muted }}>Aménagements raisonnables</div>
           </div>
         </div>
         <a href={`/api/generate-pdf?token=${encodeURIComponent(token)}`}
           target="_blank" rel="noopener noreferrer"
-          style={{ background: '#f97316', color: '#fff', borderRadius: 20, padding: '6px 16px', fontSize: 12, fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap' }}>
+          style={{ background: COLORS.orange, color: '#fff', borderRadius: 20, padding: '10px 20px', fontSize: BASE, fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap' }}>
           Imprimer / PDF
         </a>
-      </div>
+      </header>
 
-      <div style={{ maxWidth: 860, margin: '0 auto', padding: '24px 20px' }}>
+      <main style={{ maxWidth: 900, margin: '0 auto', padding: '24px 20px' }}>
         <div style={{ marginBottom: 24 }}>
-          <h1 style={{ fontSize: 20, fontWeight: 700, color: '#1a1814', margin: '0 0 4px' }}>
-            {teacher?.name}
-          </h1>
-          <p style={{ fontSize: 12, color: '#9a958c', margin: 0 }}>
+          <h1 style={{ fontSize: 24, fontWeight: 700, color: COLORS.text, margin: '0 0 4px' }}>{teacher?.name}</h1>
+          <p style={{ fontSize: BASE, color: COLORS.muted, margin: 0 }}>
             Consulté le {new Date().toLocaleDateString('fr-BE', { day: 'numeric', month: 'long', year: 'numeric' })}
             {teacher?.subject && ` — ${teacher.subject}`}
           </p>
         </div>
 
-        {Object.entries(byClass).sort().map(([cls, students]) => {
-          // Calculer les AUs communes (ARs présents chez ≥2 élèves)
-          const arCount = {}
-          students.forEach(s => s.ars.forEach(ar => {
-            arCount[ar.label] = (arCount[ar.label] || 0) + 1
-          }))
-          const commonARs = Object.entries(arCount)
-            .filter(([, count]) => count >= 2)
-            .map(([label]) => label)
+        {classes.length === 0 && (
+          <p style={{ fontSize: BASE, color: COLORS.muted }}>
+            Aucun élève ne vous est assigné pour le moment. Votre référente PLAI
+            vous préviendra dès qu'un dossier vous concerne.
+          </p>
+        )}
 
+        {classes.map(([cls, students]) => {
+          const common = commonARs(students)
           return (
-            <div key={cls} style={{ marginBottom: 32 }}>
-              {/* En-tête classe */}
-              <div style={{ background: '#1a1814', color: '#fff', padding: '8px 16px', borderRadius: '6px 6px 0 0', fontSize: 13, fontWeight: 700 }}>
+            <section key={cls} style={{ marginBottom: 32 }}>
+              <h2 style={{ background: COLORS.text, color: '#fff', padding: '10px 16px', borderRadius: '6px 6px 0 0', fontSize: 18, fontWeight: 700, margin: 0 }}>
                 {cls}
-              </div>
+              </h2>
 
-              {/* AUs communes */}
-              {commonARs.length > 0 && (
-                <div style={{ background: '#e8f5f0', border: '1px solid #0a9370', borderTop: 'none', padding: '10px 16px' }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: '#0a9370', marginBottom: 6 }}>
-                    AMÉNAGEMENTS COMMUNS À LA CLASSE
-                  </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {commonARs.map(label => (
-                      <span key={label} style={{ background: '#fff', border: '1px solid #0a9370', borderRadius: 12, padding: '2px 10px', fontSize: 11, color: '#0a9370' }}>
+              {common.length > 0 && (
+                <div style={{ background: '#e8f5f0', border: `1px solid ${COLORS.teal}`, borderTop: 'none', padding: '12px 16px' }}>
+                  <h3 style={{ fontSize: BASE, fontWeight: 700, color: COLORS.tealText, margin: '0 0 8px' }}>
+                    Aménagements communs à la classe
+                  </h3>
+                  <p style={{ fontSize: SMALL, color: COLORS.muted, margin: '0 0 8px' }}>
+                    Partagés par au moins un tiers des élèves suivis : les mettre en place
+                    pour tout le groupe coûte moins cher que de les individualiser.
+                  </p>
+                  <ul style={{ display: 'flex', flexWrap: 'wrap', gap: 8, listStyle: 'none', margin: 0, padding: 0 }}>
+                    {common.map(label => (
+                      <li key={label} style={{ background: '#fff', border: `1px solid ${COLORS.teal}`, borderRadius: 14, padding: '4px 12px', fontSize: BASE, color: COLORS.tealText }}>
                         {label}
-                      </span>
+                      </li>
                     ))}
-                  </div>
+                  </ul>
                 </div>
               )}
 
-              {/* Tableau par élève */}
               {students.map(student => (
-                <div key={student.id} style={{ border: '1px solid #e8e4dd', borderTop: 'none', background: '#fff' }}>
-                  <div style={{ padding: '6px 16px', borderBottom: '1px solid #e8e4dd', fontSize: 12, fontWeight: 600, color: '#1a1814', background: '#faf9f7' }}>
-                    {student.anonymous_code}
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr' }}>
+                <article key={student.id} style={{ border: `1px solid ${COLORS.border}`, borderTop: 'none', background: '#fff' }}>
+                  <h3 style={{ padding: '10px 16px', borderBottom: `1px solid ${COLORS.border}`, fontSize: BASE, fontWeight: 700, color: COLORS.text, background: COLORS.bg, margin: 0 }}>
+                    {student.name}
+                  </h3>
+                  {/* auto-fit : 3 colonnes sur desktop, empilement sur mobile */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
                     {CATEGORIES.map(cat => {
                       const catARs = student.ars.filter(a => a.category === cat)
                       return (
-                        <div key={cat} style={{ padding: '10px 12px', borderRight: cat !== 'Organisationnels' ? '1px solid #e8e4dd' : 'none' }}>
-                          <div style={{ fontSize: 10, fontWeight: 700, color: '#9a958c', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
+                        <div key={cat} style={{ padding: '12px 14px', borderTop: `1px solid ${COLORS.border}` }}>
+                          <div style={{ fontSize: SMALL, fontWeight: 700, color: COLORS.muted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
                             {cat}
                           </div>
                           {catARs.length === 0
-                            ? <span style={{ fontSize: 11, color: '#d4cfc6' }}>—</span>
-                            : catARs.map((ar, i) => (
-                              <div key={i} style={{ fontSize: 12, color: '#1a1814', marginBottom: 4 }}>
-                                • {ar.label}
-                                {ar.has_precision && ar.precision_value && (
-                                  <span style={{ color: '#5a564f' }}> ({ar.precision_value})</span>
-                                )}
-                              </div>
-                            ))
-                          }
+                            ? <span style={{ fontSize: BASE, color: COLORS.muted }}>Aucun</span>
+                            : (
+                              <ul style={{ margin: 0, paddingLeft: 20 }}>
+                                {catARs.map((ar, i) => (
+                                  <li key={i} style={{ fontSize: BASE, color: COLORS.text, marginBottom: 6 }}>
+                                    {ar.label}
+                                    {ar.has_precision && ar.precision_value && (
+                                      <span style={{ color: COLORS.muted }}> ({ar.precision_value})</span>
+                                    )}
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
                         </div>
                       )
                     })}
                   </div>
-                </div>
+                </article>
               ))}
-            </div>
+            </section>
           )
         })}
 
-        <p style={{ fontSize: 11, color: '#9a958c', textAlign: 'center', marginTop: 32 }}>
-          Document confidentiel — usage pédagogique interne uniquement — PLAI Liège
+        <p style={{ fontSize: SMALL, color: COLORS.muted, textAlign: 'center', marginTop: 32 }}>
+          Document confidentiel — usage pédagogique interne uniquement — PLAI Liège.<br />
+          Ce lien est personnel : ne le transmettez pas.
         </p>
-      </div>
+      </main>
     </div>
   )
 }

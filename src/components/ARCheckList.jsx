@@ -1,62 +1,116 @@
+import { useState } from 'react'
 import { useStudentARs } from '../hooks/useStudents'
+import { BASE, SMALL, COLORS, card, h3, input, btnGhost, fullName } from '../lib/ui'
 
-export default function ARCheckList({ studentId }) {
-  const { ars, definitions, loading, toggleAR } = useStudentARs(studentId)
+const CATEGORIES = ['Matériels', 'Pédagogiques', 'Organisationnels']
 
-  if (loading) return <p style={{ color: '#9a958c', padding: '10px 0', fontSize: 13 }}>Chargement des ARs…</p>
+const ACTION_LABELS = {
+  accorde: 'Accordé',
+  retire: 'Retiré',
+  modifie: 'Précision modifiée',
+}
 
-  const categories = ['Matériels', 'Pédagogiques', 'Organisationnels']
+export default function ARCheckList({ student }) {
+  const studentId = student?.id
+  const { ars, definitions, history, loading, error, toggleAR } = useStudentARs(studentId)
+  const [showHistory, setShowHistory] = useState(false)
 
-  function getAR(defId) {
-    return ars.find(a => a.ar_definition_id === defId)
-  }
+  if (loading) return <p style={{ color: COLORS.muted, padding: '10px 0', fontSize: BASE }}>Chargement des aménagements…</p>
 
-  async function handleToggle(def, checked) {
-    const existing = getAR(def.id)
-    await toggleAR(def.id, checked, existing?.precision_value || null)
-  }
-
-  async function handlePrecision(def, value) {
-    await toggleAR(def.id, true, value)
-  }
+  const getAR = defId => ars.find(a => a.ar_definition_id === defId)
+  const activeCount = ars.filter(a => a.is_active).length
 
   return (
-    <div style={{ background: '#fff', border: '1px solid #e8e4dd', borderRadius: 10, padding: '20px 24px', marginTop: 16 }}>
-      <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 16, color: '#1a1814' }}>Aménagements raisonnables</h3>
-      {categories.map(cat => {
+    <div style={{ ...card, marginTop: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
+        <h3 style={{ ...h3, marginBottom: 4 }}>Aménagements de {fullName(student)}</h3>
+        <button onClick={() => setShowHistory(h => !h)} style={{ ...btnGhost, padding: '6px 14px', fontSize: SMALL }}>
+          {showHistory ? 'Masquer l\'historique' : `Historique (${history.length})`}
+        </button>
+      </div>
+      <p style={{ fontSize: SMALL, color: COLORS.muted, marginTop: 0, marginBottom: 16 }}>
+        {activeCount} aménagement(s) actif(s). Chaque modification est horodatée et
+        attribuée — l'historique fait foi en cas de contestation.
+      </p>
+
+      {error && (
+        <p role="alert" style={{ color: COLORS.danger, fontSize: BASE, marginBottom: 12 }}>
+          Enregistrement impossible : {error}
+        </p>
+      )}
+
+      {showHistory && (
+        <div style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '12px 16px', marginBottom: 20 }}>
+          {history.length === 0
+            ? <p style={{ fontSize: BASE, color: COLORS.muted, margin: 0 }}>Aucune décision enregistrée pour l'instant.</p>
+            : (
+              <ul style={{ margin: 0, paddingLeft: 20 }}>
+                {history.map(h => (
+                  <li key={h.id} style={{ fontSize: SMALL, color: COLORS.text, marginBottom: 6 }}>
+                    <strong>{ACTION_LABELS[h.action] || h.action}</strong>
+                    {' — '}{h.acces_ar_definitions?.label || 'aménagement supprimé'}
+                    <span style={{ color: COLORS.muted }}>
+                      {' · '}{new Date(h.decided_at).toLocaleDateString('fr-BE', { day: 'numeric', month: 'long', year: 'numeric' })}
+                      {h.acces_referentes?.name ? ` · ${h.acces_referentes.name}` : ''}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+        </div>
+      )}
+
+      {CATEGORIES.map(cat => {
         const defs = definitions.filter(d => d.category === cat)
         if (!defs.length) return null
         return (
-          <div key={cat} style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#0a9370', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>
+          <fieldset key={cat} style={{ border: 'none', padding: 0, margin: '0 0 24px' }}>
+            <legend style={{ fontSize: BASE, fontWeight: 700, color: COLORS.tealText, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10, padding: 0 }}>
               {cat}
-            </div>
+            </legend>
             {defs.map(def => {
               const ar = getAR(def.id)
               const isActive = ar?.is_active || false
               return (
-                <div key={def.id} style={{ marginBottom: 8 }}>
-                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer' }}>
+                <div key={def.id} style={{ marginBottom: 12 }}>
+                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}>
                     <input type="checkbox" checked={isActive}
-                      onChange={e => handleToggle(def, e.target.checked)}
-                      style={{ marginTop: 2, accentColor: '#0a9370' }} />
-                    <span style={{ fontSize: 13, color: '#1a1814' }}>{def.label}</span>
+                      onChange={e => toggleAR(def.id, e.target.checked, ar?.precision_value || null, ar?.review_due_on || null)}
+                      style={{ marginTop: 3, width: 18, height: 18, accentColor: COLORS.teal, flexShrink: 0 }} />
+                    <span style={{ fontSize: BASE, color: COLORS.text, lineHeight: 1.4 }}>{def.label}</span>
                   </label>
-                  {def.has_precision && isActive && (
-                    <div style={{ marginLeft: 24, marginTop: 4 }}>
-                      <input
-                        type="text"
-                        placeholder={def.precision_label}
-                        defaultValue={ar?.precision_value || ''}
-                        onBlur={e => handlePrecision(def, e.target.value)}
-                        style={{ border: '1px solid #d4cfc6', borderRadius: 4, padding: '4px 8px', fontSize: 12, width: 180 }}
-                      />
+
+                  {isActive && (
+                    <div style={{ marginLeft: 28, marginTop: 8, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                      {def.has_precision && (
+                        <div>
+                          <label style={{ fontSize: SMALL, color: COLORS.muted, display: 'block', marginBottom: 2 }}
+                            htmlFor={`prec-${def.id}`}>
+                            {def.precision_label || 'Précision'}
+                          </label>
+                          <input id={`prec-${def.id}`} type="text"
+                            placeholder={def.precision_label || ''}
+                            defaultValue={ar?.precision_value || ''}
+                            onBlur={e => toggleAR(def.id, true, e.target.value || null, ar?.review_due_on || null)}
+                            style={{ ...input, width: 220, marginBottom: 0 }} />
+                        </div>
+                      )}
+                      <div>
+                        <label style={{ fontSize: SMALL, color: COLORS.muted, display: 'block', marginBottom: 2 }}
+                          htmlFor={`rev-${def.id}`}>
+                          À revoir le
+                        </label>
+                        <input id={`rev-${def.id}`} type="date"
+                          defaultValue={ar?.review_due_on || ''}
+                          onBlur={e => toggleAR(def.id, true, ar?.precision_value || null, e.target.value || null)}
+                          style={{ ...input, width: 180, marginBottom: 0 }} />
+                      </div>
                     </div>
                   )}
                 </div>
               )
             })}
-          </div>
+          </fieldset>
         )
       })}
     </div>
