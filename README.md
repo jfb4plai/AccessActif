@@ -45,28 +45,18 @@ npm install
 cp .env.local.example .env.local
 ```
 
-Appliquer les migrations SQL **dans l'ordre**, via l'éditeur SQL Supabase :
+Base vierge : coller **`supabase/INSTALL.sql`** dans l'éditeur SQL Supabase
+(un seul copier-coller, rejouable sans risque). Adapter la PARTIE 5 — email et
+noms d'écoles — avant de lancer. Le compte doit exister au préalable dans
+Authentication > Users : l'application ne gère pas l'inscription.
 
-```
-001_schema.sql                    schéma initial
-002_rls.sql                       RLS et policies
-003_seed_ars.sql                  48 aménagements de référence
-004_add_student_name.sql          obsolète, annulée par la 006
-005_fix_ar_definitions_insert.sql un super_admin peut créer un AU actif
-006_nominatif_annee_scolaire.sql  nominatif, année scolaire, rétention
-007_membre_plai_multi_ecoles.sql  rattachement multi-écoles
-008_tokens_et_journal.sql         révocation des liens, journal minimisé
-009_historique_amenagements.sql   historique des décisions
-```
+Sans ligne dans `acces_referente_schools`, l'application affiche « aucune
+école rattachée », y compris pour un super_admin.
 
-Les migrations 006 et 007 sont **destructives** (`drop column disorders`,
-refonte des policies) : exporter la base avant de les appliquer sur des
-données réelles.
+Les fichiers numérotés `001` à `009` retracent l'historique des migrations et
+ne servent qu'à faire évoluer une base déjà installée.
 
-Puis exécuter `bootstrap.sql` (écoles, rôle, rattachement). Sans au moins
-une ligne dans `acces_referente_schools`, l'application affiche « aucune
-école rattachée ». Les comptes se créent dans Supabase Auth : l'application
-ne gère pas l'inscription.
+Production : https://access-actif.vercel.app
 
 ## Développement
 
