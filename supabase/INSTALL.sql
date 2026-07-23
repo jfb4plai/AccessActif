@@ -12,8 +12,8 @@
 -- `disorders`, `name`, `ip_address` et `token`, voulues (donnée de santé et
 -- secrets en clair).
 --
--- AVANT DE LANCER : remplacer l'email et les noms d'écoles dans la PARTIE 5.
--- Le compte doit déjà exister dans Authentication > Users.
+-- UNE SEULE CHOSE À MODIFIER : les noms d'écoles, tout en bas (PARTIE 5).
+-- Le compte jf.beguin@outlook.com est déjà renseigné.
 -- ============================================================================
 
 
@@ -439,25 +439,30 @@ on conflict (label) do nothing;
 
 
 -- ============================================================================
--- PARTIE 5 — VOTRE COMPTE ET VOS ÉCOLES  ← ADAPTER CES VALEURS
+-- PARTIE 5 — VOTRE COMPTE ET VOS ÉCOLES
 -- ============================================================================
--- Le compte doit déjà exister dans Authentication > Users.
+--
+--   >>> SEULE SECTION À MODIFIER : remplacer les noms d'écoles ci-dessous. <<<
+--
+-- Une ligne par école, séparées par une virgule, la dernière sans virgule.
+-- Le type est 'IPT', 'PAR' ou 'both'. En ajouter plus tard = rejouer ces
+-- trois requêtes (l'application n'a pas encore d'écran de gestion des écoles).
 
 insert into acces_schools (name, type) values
-  ('École à renommer 1', 'IPT'),
-  ('École à renommer 2', 'PAR')
+  ('Nom de votre première école', 'IPT'),
+  ('Nom de votre deuxième école', 'PAR')
 on conflict do nothing;
 
 insert into acces_referentes (id, name, role)
 select id, 'Jean-François Beguin', 'super_admin'
-  from auth.users where email = 'jeanfrancois.beguin@ens.ecl.be'
+  from auth.users where email = 'jf.beguin@outlook.com'
 on conflict (id) do update set role = excluded.role;
 
 -- Indispensable : sans une ligne ici, l'app affiche « aucune école rattachée »,
 -- y compris pour un super_admin.
 insert into acces_referente_schools (referente_id, school_id)
 select u.id, s.id from auth.users u cross join acces_schools s
- where u.email = 'jeanfrancois.beguin@ens.ecl.be'
+ where u.email = 'jf.beguin@outlook.com'
 on conflict do nothing;
 
 
