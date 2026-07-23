@@ -12,8 +12,9 @@
 -- `disorders`, `name`, `ip_address` et `token`, voulues (donnée de santé et
 -- secrets en clair).
 --
--- UNE SEULE CHOSE À MODIFIER : les noms d'écoles, tout en bas (PARTIE 5).
--- Le compte jf.beguin@outlook.com est déjà renseigné.
+-- RIEN À MODIFIER : se lance tel quel. Le compte jf.beguin@outlook.com est
+-- renseigné, et deux écoles de test permettent d'essayer l'app immédiatement.
+-- Les vraies écoles viendront du fichier des intervenants (numéro FASE).
 -- ============================================================================
 
 
@@ -25,8 +26,15 @@ create table if not exists acces_schools (
   id         uuid primary key default gen_random_uuid(),
   name       text not null,
   type       text check (type in ('IPT','PAR','both')) default 'IPT',
+  fase_code  text,
   created_at timestamptz default now()
 );
+-- Numéro FASE d'implantation : clé officielle FWB, servira de clé d'import
+-- et de déduplication quand les écoles seront chargées depuis le fichier
+-- des intervenants. Nullable tant que les vraies écoles ne sont pas saisies.
+alter table acces_schools add column if not exists fase_code text;
+create unique index if not exists acces_schools_fase_uniq
+  on acces_schools (fase_code) where fase_code is not null;
 
 create table if not exists acces_referentes (
   id         uuid primary key references auth.users(id) on delete cascade,
@@ -439,18 +447,17 @@ on conflict (label) do nothing;
 
 
 -- ============================================================================
--- PARTIE 5 — VOTRE COMPTE ET VOS ÉCOLES
+-- PARTIE 5 — COMPTE ET ÉCOLES DE TEST
 -- ============================================================================
+-- Rien à modifier : ce fichier se lance tel quel.
 --
---   >>> SEULE SECTION À MODIFIER : remplacer les noms d'écoles ci-dessous. <<<
---
--- Une ligne par école, séparées par une virgule, la dernière sans virgule.
--- Le type est 'IPT', 'PAR' ou 'both'. En ajouter plus tard = rejouer ces
--- trois requêtes (l'application n'a pas encore d'écran de gestion des écoles).
+-- Deux écoles fictives, volontairement nommées « TEST » pour être repérables
+-- et supprimables d'un coup. Les vraies écoles seront chargées depuis le
+-- fichier des intervenants (nom + numéro FASE d'implantation).
 
 insert into acces_schools (name, type) values
-  ('Nom de votre première école', 'IPT'),
-  ('Nom de votre deuxième école', 'PAR')
+  ('TEST — École secondaire', 'IPT'),
+  ('TEST — École fondamentale', 'PAR')
 on conflict do nothing;
 
 insert into acces_referentes (id, name, role)
@@ -480,3 +487,22 @@ select r.name, r.role, count(rs.school_id) as ecoles_rattachees
 select category, count(*) as amenagements
   from acces_ar_definitions where status = 'active'
  group by category order by category;
+
+
+-- ============================================================================
+-- PARTIE 7 — NETTOYAGE DES DONNÉES DE TEST  (à jouer plus tard, séparément)
+-- ============================================================================
+-- Quand les vraies écoles seront chargées, supprimer d'un coup tout ce qui a
+-- servi aux essais. Les cascades emportent élèves, aménagements, enseignants,
+-- liens, tokens et journal rattachés à ces écoles.
+--
+--   delete from acces_schools where name like 'TEST — %';
+--
+-- Vérifier avant de supprimer ce qui sera emporté :
+--
+--   select s.name, count(distinct e.id) as eleves, count(distinct p.id) as enseignants
+--     from acces_schools s
+--     left join acces_students e on e.school_id = s.id
+--     left join acces_teachers p on p.school_id = s.id
+--    where s.name like 'TEST — %'
+--    group by s.name;
