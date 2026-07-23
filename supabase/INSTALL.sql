@@ -225,7 +225,9 @@ returns text language sql security definer stable as $$
   select role from acces_referentes where id = auth.uid()
 $$;
 
-drop function if exists acces_my_school_id();
+-- acces_my_school_id() (mono-école) n'est PAS supprimée ici : les anciennes
+-- policies de la migration 002 en dépendent encore. Sa suppression a lieu en
+-- fin de PARTIE 3, une fois ces policies retirées.
 
 -- Reprise d'une année sur l'autre. Security invoker volontairement : la RLS
 -- s'applique, une référente ne peut reprendre que ses propres écoles.
@@ -285,8 +287,12 @@ begin
     return new;
   end if;
 
+  -- decided_by via un select : si le compte courant n'est pas une référente
+  -- (service_role, compte orphelin), on enregistre null plutôt que de violer
+  -- la clé étrangère — l'historique ne doit jamais bloquer l'aménagement.
   insert into acces_ar_history (student_id, ar_definition_id, action, precision_value, decided_by)
-  values (new.student_id, new.ar_definition_id, v_action, new.precision_value, auth.uid());
+  values (new.student_id, new.ar_definition_id, v_action, new.precision_value,
+          (select id from acces_referentes where id = auth.uid()));
   return new;
 end; $$;
 
@@ -336,6 +342,10 @@ drop policy if exists "tokens_service_only"           on acces_tokens;
 drop policy if exists "log_service_only"              on acces_access_log;
 drop policy if exists "log_read_own_schools"          on acces_access_log;
 drop policy if exists "ar_history_own_schools"        on acces_ar_history;
+
+-- Maintenant seulement : plus aucune policy ne dépend de l'ancienne fonction
+-- mono-école. La supprimer plus tôt échouerait en 2BP01 (dependent objects).
+drop function if exists acces_my_school_id();
 
 create policy "schools_read" on acces_schools for select
   using (auth.uid() is not null);

@@ -49,10 +49,14 @@ begin
     return new;  -- rien de substantiel n'a changé
   end if;
 
+  -- decided_by via un select : si le compte courant n'est pas une référente
+  -- (service_role, compte orphelin), on enregistre null plutôt que de violer
+  -- la clé étrangère — l'historique ne doit jamais bloquer l'aménagement.
   insert into acces_ar_history
     (student_id, ar_definition_id, action, precision_value, decided_by)
   values
-    (new.student_id, new.ar_definition_id, v_action, new.precision_value, auth.uid());
+    (new.student_id, new.ar_definition_id, v_action, new.precision_value,
+     (select id from acces_referentes where id = auth.uid()));
 
   return new;
 end;

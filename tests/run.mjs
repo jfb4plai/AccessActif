@@ -131,6 +131,19 @@ for (const fn of ['acces_my_school_ids', 'acces_my_role', 'acces_carry_over_year
 }
 check('acces_my_school_id (mono-ecole) supprimee', () =>
   assert.match(sql, /drop function if exists acces_my_school_id\(\)/))
+// La supprimer avant d'avoir retire les policies de la migration 002 echoue
+// en 2BP01 : cannot drop function because other objects depend on it.
+check('drop function APRES le drop des policies 002', () => {
+  const iDropFn = sql.indexOf('drop function if exists acces_my_school_id()')
+  const iLastDropPolicy = sql.lastIndexOf('drop policy if exists')
+  assert.ok(iDropFn > iLastDropPolicy,
+    'drop function doit venir apres le dernier drop policy')
+})
+check('drop function AVANT la recreation des policies', () => {
+  const iDropFn = sql.indexOf('drop function if exists acces_my_school_id()')
+  assert.ok(iDropFn < sql.indexOf('create policy'),
+    'drop function doit venir avant les create policy')
+})
 check('trigger historique', () => assert.match(sql, /create trigger acces_ar_history_trg/))
 check('rattachement migre AVANT le drop de school_id', () =>
   assert.ok(sql.indexOf('insert into acces_referente_schools (referente_id, school_id)')
