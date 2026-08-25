@@ -76,6 +76,20 @@ export function useTeacherStudents(teacherId) {
     await load()
   }
 
+  /** Coche ou décoche toute une classe d'un coup, en une seule recharge. */
+  async function toggleMany(studentIds, linked) {
+    if (linked) {
+      const rows = studentIds
+        .filter(id => !linkedStudentIds.includes(id))
+        .map(student_id => ({ teacher_id: teacherId, student_id }))
+      if (rows.length) await supabase.from('acces_teacher_students').insert(rows)
+    } else {
+      await supabase.from('acces_teacher_students').delete()
+        .eq('teacher_id', teacherId).in('student_id', studentIds)
+    }
+    await load()
+  }
+
   useEffect(() => { load() }, [load])
-  return { linkedStudentIds, allStudents, loading, toggleStudent, reload: load }
+  return { linkedStudentIds, allStudents, loading, toggleStudent, toggleMany, reload: load }
 }

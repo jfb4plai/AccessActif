@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useStudentARs } from '../hooks/useStudents'
-import { BASE, SMALL, COLORS, card, h3, input, btnGhost, fullName } from '../lib/ui'
+import { useApp } from '../lib/useApp'
+import { supabase } from '../lib/supabase'
+import { BASE, SMALL, COLORS, card, h3, input, label, btn, btnGhost, fullName } from '../lib/ui'
 
 const CATEGORIES = ['Matériels', 'Pédagogiques', 'Organisationnels']
 
@@ -10,15 +12,55 @@ const ACTION_LABELS = {
   modifie: 'Précision modifiée',
 }
 
-export default function ARCheckList({ student }) {
+export default function ARCheckList({ student, onProposeAR }) {
   const studentId = student?.id
-  const { ars, definitions, history, loading, error, toggleAR } = useStudentARs(studentId)
+  const { ars, definitions, history, loading, error, toggleAR, reload } = useStudentARs(studentId)
+  const { isSuperAdmin } = useApp()
   const [showHistory, setShowHistory] = useState(false)
+  const [search, setSearch] = useState('')
+  const [proposeCategory, setProposeCategory] = useState(CATEGORIES[0])
+  const [proposing, setProposing] = useState(false)
+  const [proposeError, setProposeError] = useState(null)
+  const [proposeDone, setProposeDone] = useState(null)
 
   if (loading) return <p style={{ color: COLORS.muted, padding: '10px 0', fontSize: BASE }}>Chargement des aménagements…</p>
 
   const getAR = defId => ars.find(a => a.ar_definition_id === defId)
   const activeCount = ars.filter(a => a.is_active).length
+
+  async function handlePropose(e) {
+    e.preventDefault()
+    setProposing(true)
+    setProposeError(null)
+    const newLabel = search.trim()
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: newDef, error: err } = await supabase.from('acces_ar_definitions').insert({
+      label: newLabel,
+      category: proposeCategory,
+      has_precision: false,
+      precision_label: null,
+      status: isSuperAdmin ? 'active' : 'proposed',
+      created_by: user.id,
+    }).select().single()
+    setProposing(false)
+    if (err) { setProposeError(err.message); return }
+
+    if (isSuperAdmin) {
+      await reload()
+      await toggleAR(newDef.id, true, null, null)
+      setSearch('')
+    } else {
+      setProposeDone(newLabel)
+    }
+  }
+
+  // La recherche ne masque jamais un aménagement déjà accordé : on ne veut
+  // pas qu'un filtre fasse perdre de vue un aménagement actif.
+  const q = search.trim().toLowerCase()
+  const visibleDefs = q
+    ? definitions.filter(d => d.label.toLowerCase().includes(q) || getAR(d.id)?.is_active)
+    : definitions
+  const matchCount = q ? definitions.filter(d => d.label.toLowerCase().includes(q)).length : null
 
   return (
     <div style={{ ...card, marginTop: 16 }}>
@@ -32,6 +74,61 @@ export default function ARCheckList({ student }) {
         {activeCount} aménagement(s) actif(s). Chaque modification est horodatée et
         attribuée — l'historique fait foi en cas de contestation.
       </p>
+
+      <label htmlFor="ar-search" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>
+        Rechercher un aménagement parmi les {definitions.length}
+      </label>
+      <input id="ar-search" type="search" value={search}
+        onChange={e => { setSearch(e.target.value); setProposeDone(null) }}
+        placeholder={`Rechercher parmi les ${definitions.length} aménagements…`}
+        style={{ ...input, maxWidth: 360, marginBottom: 4 }} />
+
+      {q && matchCount > 0 && (
+        <p style={{ fontSize: SMALL, color: COLORS.muted, marginTop: 0, marginBottom: 16 }}>
+          {matchCount} résultat(s).
+        </p>
+      )}
+
+      {q && matchCount === 0 && !proposeDone && (
+        <form onSubmit={handlePropose} style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}`, borderRadius: 8, padding: '14px 16px', marginBottom: 16 }}>
+          <p style={{ fontSize: BASE, color: COLORS.text, margin: '0 0 10px', fontWeight: 600 }}>
+            Aucun aménagement ne correspond à « {search.trim()} ».
+          </p>
+          <p style={{ fontSize: SMALL, color: COLORS.muted, margin: '0 0 12px' }}>
+            L'ajouter à la liste partagée par toutes les écoles du Pôle, dans quelle catégorie ?
+            {!isSuperAdmin && ' Un coordinateur devra valider avant qu\'il soit utilisable.'}
+          </p>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+            <div>
+              <label style={label} htmlFor="propose-cat">Catégorie</label>
+              <select id="propose-cat" value={proposeCategory} onChange={e => setProposeCategory(e.target.value)} style={{ ...input, marginBottom: 0 }}>
+                {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+              </select>
+            </div>
+            <button type="submit" disabled={proposing}
+              style={{ ...btn, background: proposing ? COLORS.muted : COLORS.orange }}>
+              {proposing ? 'Envoi…' : (isSuperAdmin ? 'Ajouter et cocher' : 'Proposer')}
+            </button>
+            {onProposeAR && (
+              <button type="button" onClick={onProposeAR} style={{ ...btnGhost, padding: '10px 16px' }}>
+                Gérer la liste complète
+              </button>
+            )}
+          </div>
+          {proposeError && (
+            <p role="alert" style={{ color: COLORS.danger, fontSize: SMALL, marginTop: 10, marginBottom: 0 }}>
+              {proposeError}
+            </p>
+          )}
+        </form>
+      )}
+
+      {proposeDone && (
+        <p role="status" style={{ background: '#e8f5f0', border: `1px solid ${COLORS.teal}`, borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: BASE, color: COLORS.tealText }}>
+          « {proposeDone} » proposé dans {proposeCategory}. Dès validation par un coordinateur,
+          vous pourrez le cocher pour vos élèves.
+        </p>
+      )}
 
       {error && (
         <p role="alert" style={{ color: COLORS.danger, fontSize: BASE, marginBottom: 12 }}>
@@ -61,7 +158,7 @@ export default function ARCheckList({ student }) {
       )}
 
       {CATEGORIES.map(cat => {
-        const defs = definitions.filter(d => d.category === cat)
+        const defs = visibleDefs.filter(d => d.category === cat)
         if (!defs.length) return null
         return (
           <fieldset key={cat} style={{ border: 'none', padding: 0, margin: '0 0 24px' }}>

@@ -1,22 +1,23 @@
 import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useApp } from '../../lib/useApp'
+import HomePage from './HomePage'
 import StudentsPage from './StudentsPage'
 import TeachersPage from './TeachersPage'
-import DashboardPage from './DashboardPage'
 import ARDefinitionsPage from './ARDefinitionsPage'
 import { BASE, SMALL, COLORS, input } from '../../lib/ui'
 import { schoolYearOptions } from '../../lib/ui'
 
 const TABS = [
+  { id: 'home', label: 'Accueil' },
   { id: 'students', label: 'Élèves' },
   { id: 'teachers', label: 'Enseignants' },
-  { id: 'dashboard', label: 'Suivi versions' },
   { id: 'ars', label: 'Aménagements & propositions' },
 ]
 
 export default function AdminRouter({ session }) {
-  const [tab, setTab] = useState('students')
+  const [tab, setTab] = useState('home')
+  const [focusTeacherId, setFocusTeacherId] = useState(null)
   const { schools, schoolId, setSchoolId, year, setYear, loading, error } = useApp()
 
   if (loading) return <p style={{ padding: 24, fontSize: BASE, color: COLORS.muted }}>Chargement de votre espace…</p>
@@ -92,9 +93,11 @@ export default function AdminRouter({ session }) {
       </header>
 
       <main style={{ maxWidth: 960, margin: '0 auto', padding: '24px 20px' }}>
-        {tab === 'students' && <StudentsPage />}
-        {tab === 'teachers' && <TeachersPage />}
-        {tab === 'dashboard' && <DashboardPage />}
+        {tab === 'home' && <HomePage onManageTeacher={id => { setFocusTeacherId(id); setTab('teachers') }} />}
+        {tab === 'students' && <StudentsPage onProposeAR={() => setTab('ars')} />}
+        {tab === 'teachers' && (
+          <TeachersPage focusTeacherId={focusTeacherId} onFocusHandled={() => setFocusTeacherId(null)} />
+        )}
         {tab === 'ars' && <ARDefinitionsPage />}
       </main>
     </div>

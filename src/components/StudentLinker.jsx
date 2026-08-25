@@ -3,7 +3,7 @@ import { useTeacherStudents } from '../hooks/useTeachers'
 import { BASE, SMALL, COLORS, card, h3, input, fullName } from '../lib/ui'
 
 export default function StudentLinker({ teacherId }) {
-  const { linkedStudentIds, allStudents, loading, toggleStudent } = useTeacherStudents(teacherId)
+  const { linkedStudentIds, allStudents, loading, toggleStudent, toggleMany } = useTeacherStudents(teacherId)
   const [search, setSearch] = useState('')
 
   const byClass = useMemo(() => {
@@ -45,11 +45,22 @@ export default function StudentLinker({ teacherId }) {
         </p>
       )}
 
-      {Object.entries(byClass).sort().map(([cls, students]) => (
+      {Object.entries(byClass).sort().map(([cls, students]) => {
+        const ids = students.map(s => s.id)
+        const allChecked = ids.every(id => linkedStudentIds.includes(id))
+        return (
         <fieldset key={cls} style={{ border: 'none', padding: 0, margin: '0 0 18px' }}>
-          <legend style={{ fontSize: BASE, fontWeight: 700, color: COLORS.tealText, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8, padding: 0 }}>
-            {cls}
-          </legend>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 8, flexWrap: 'wrap' }}>
+            <legend style={{ fontSize: BASE, fontWeight: 700, color: COLORS.tealText, textTransform: 'uppercase', letterSpacing: 0.5, padding: 0 }}>
+              {cls}
+            </legend>
+            {ids.length > 1 && (
+              <button type="button" onClick={() => toggleMany(ids, !allChecked)}
+                style={{ background: 'none', border: 'none', padding: 0, fontSize: SMALL, color: COLORS.muted, textDecoration: 'underline', cursor: 'pointer', fontFamily: 'inherit' }}>
+                {allChecked ? 'Tout décocher' : 'Tout cocher'}
+              </button>
+            )}
+          </div>
           {students.map(s => (
             <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, cursor: 'pointer' }}>
               <input type="checkbox" checked={linkedStudentIds.includes(s.id)}
@@ -59,7 +70,8 @@ export default function StudentLinker({ teacherId }) {
             </label>
           ))}
         </fieldset>
-      ))}
+        )
+      })}
     </div>
   )
 }

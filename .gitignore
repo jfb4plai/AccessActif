@@ -25,3 +25,7 @@ dist-ssr
 
 # Sortie de test inspectable
 tests/pdf-preview.html
+
+.vercel
+.env*.local
+.env*

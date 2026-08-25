@@ -6,7 +6,7 @@ import ARCheckList from '../../components/ARCheckList'
 import { BASE, SMALL, COLORS, btn, btnGhost, input, h2 } from '../../lib/ui'
 import { fullName } from '../../lib/ui'
 
-export default function StudentsPage() {
+export default function StudentsPage({ onProposeAR }) {
   const { students, loading, error, upsertStudent, archiveStudent, carryOverFrom } = useStudents()
   const { year, school } = useApp()
   const [selected, setSelected] = useState(null)
@@ -166,7 +166,7 @@ export default function StudentsPage() {
         </div>
       ))}
 
-      {selected && !showForm && <ARCheckList student={selected} />}
+      {selected && !showForm && <ARCheckList student={selected} onProposeAR={onProposeAR} />}
     </div>
   )
 }

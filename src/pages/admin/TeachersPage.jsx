@@ -1,26 +1,31 @@
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useTeachers } from '../../hooks/useTeachers'
 import TeacherForm from '../../components/TeacherForm'
 import StudentLinker from '../../components/StudentLinker'
-import { supabase } from '../../lib/supabase'
-import { BASE, SMALL, COLORS, btn, btnGhost, h2 } from '../../lib/ui'
+import { callApi } from '../../lib/api'
+import { BASE, SMALL, COLORS, btn, btnGhost, input, h2 } from '../../lib/ui'
 
-async function callApi(path, body) {
-  const { data: { session } } = await supabase.auth.getSession()
-  const res = await fetch(path, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-    body: JSON.stringify(body),
-  })
-  return res.json()
-}
-
-export default function TeachersPage() {
+export default function TeachersPage({ focusTeacherId, onFocusHandled }) {
   const { teachers, loading, error, upsertTeacher, deleteTeacher } = useTeachers()
   const [selected, setSelected] = useState(null)
   const [showForm, setShowForm] = useState(false)
   const [busy, setBusy] = useState(null)
   const [result, setResult] = useState(null)
+  const [search, setSearch] = useState('')
+
+  useEffect(() => {
+    if (!focusTeacherId || loading) return
+    const t = teachers.find(t => t.id === focusTeacherId)
+    if (t) { setSelected(t); setShowForm(false) }
+    onFocusHandled?.()
+  }, [focusTeacherId, loading, teachers, onFocusHandled])
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return teachers
+    return teachers.filter(t =>
+      t.name.toLowerCase().includes(q) || (t.subject || '').toLowerCase().includes(q))
+  }, [teachers, search])
 
   if (loading) return <p style={{ color: COLORS.muted, padding: 20, fontSize: BASE }}>Chargement…</p>
 
@@ -93,7 +98,21 @@ export default function TeachersPage() {
         <p style={{ color: COLORS.muted, fontSize: BASE }}>Aucun enseignant encodé pour cette école.</p>
       )}
 
-      {teachers.map(t => {
+      {teachers.length > 6 && (
+        <div style={{ marginBottom: 16 }}>
+          <label htmlFor="teacher-search" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>
+            Rechercher un enseignant
+          </label>
+          <input id="teacher-search" type="search" value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Rechercher un nom, une matière…"
+            style={{ ...input, marginBottom: 4, maxWidth: 360 }} />
+          <p style={{ fontSize: SMALL, color: COLORS.muted, margin: 0 }}>
+            {filtered.length} enseignant(s) sur {teachers.length}
+          </p>
+        </div>
+      )}
+
+      {filtered.map(t => {
         const isSelected = selected?.id === t.id
         return (
           <div key={t.id}

@@ -13,7 +13,7 @@ export function useStudents() {
     setLoading(true)
     const { data, error: err } = await supabase
       .from('acces_students')
-      .select('*, acces_student_ars(id, is_active)')
+      .select('*, acces_student_ars(id, is_active, review_due_on)')
       .eq('school_id', schoolId)
       .eq('school_year', year)
       .is('archived_at', null)
