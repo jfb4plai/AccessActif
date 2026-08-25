@@ -5,10 +5,11 @@ import HomePage from './HomePage'
 import StudentsPage from './StudentsPage'
 import TeachersPage from './TeachersPage'
 import ARDefinitionsPage from './ARDefinitionsPage'
+import MembersPage from './MembersPage'
 import { BASE, SMALL, COLORS, input } from '../../lib/ui'
 import { schoolYearOptions } from '../../lib/ui'
 
-const TABS = [
+const BASE_TABS = [
   { id: 'home', label: 'Accueil' },
   { id: 'students', label: 'Élèves' },
   { id: 'teachers', label: 'Enseignants' },
@@ -18,7 +19,8 @@ const TABS = [
 export default function AdminRouter({ session }) {
   const [tab, setTab] = useState('home')
   const [focusTeacherId, setFocusTeacherId] = useState(null)
-  const { schools, schoolId, setSchoolId, year, setYear, loading, error } = useApp()
+  const { schools, schoolId, setSchoolId, year, setYear, loading, error, isSuperAdmin } = useApp()
+  const TABS = isSuperAdmin ? [...BASE_TABS, { id: 'members', label: 'Membres' }] : BASE_TABS
 
   if (loading) return <p style={{ padding: 24, fontSize: BASE, color: COLORS.muted }}>Chargement de votre espace…</p>
 
@@ -99,6 +101,7 @@ export default function AdminRouter({ session }) {
           <TeachersPage focusTeacherId={focusTeacherId} onFocusHandled={() => setFocusTeacherId(null)} />
         )}
         {tab === 'ars' && <ARDefinitionsPage />}
+        {tab === 'members' && isSuperAdmin && <MembersPage />}
       </main>
     </div>
   )
